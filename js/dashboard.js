@@ -4,9 +4,21 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function agregarEstudiante() {
-  const nombre = document.getElementById("nombre").value;
-  const correo = document.getElementById("correo").value;
-  const clase = document.getElementById("clase").value;
+  const nombre = document.getElementById("nombre").value.trim();
+  const correo = document.getElementById("correo").value.trim();
+  const clase = document.getElementById("clase").value.trim();
+
+  // 🚨 Validaciones
+  if (!nombre || !correo || !clase) {
+    alert("Por favor, completa todos los campos.");
+    return;
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(correo)) {
+    alert("Ingresa un correo válido.");
+    return;
+  }
 
   const {
     data: { user },
@@ -15,6 +27,17 @@ async function agregarEstudiante() {
 
   if (userError || !user) {
     alert("No estás autenticado.");
+    return;
+  }
+
+  // ⚠️ Validar que no haya duplicados (correo ya registrado)
+  const { data: existentes, error: errorBuscar } = await client
+    .from("estudiantes")
+    .select("id")
+    .eq("correo", correo);
+
+  if (existentes && existentes.length > 0) {
+    alert("Ya existe un estudiante con ese correo.");
     return;
   }
 
@@ -48,7 +71,7 @@ async function cargarEstudiantes() {
   lista.innerHTML = "";
   data.forEach((est) => {
     const item = document.createElement("li");
-    item.textContent = `${est.nombre} (${est.clase})`; // 🔧 CORREGIDO
+    item.textContent = `${est.nombre} (${est.clase})`;
     lista.appendChild(item);
   });
 }
@@ -64,6 +87,11 @@ async function subirArchivo() {
     return;
   }
 
+  if (archivo.size > 5 * 1024 * 1024) { // 5 MB
+    alert("El archivo no debe superar los 5 MB.");
+    return;
+  }
+
   const {
     data: { user },
     error: userError,
@@ -74,12 +102,23 @@ async function subirArchivo() {
     return;
   }
 
-  const nombreRuta = `${user.id}/${archivo.name}`; // 🔧 CORREGIDO
-  const { data, error } = await client.storage
+  const nombreRuta = `${user.id}/${archivo.name}`;
+
+  // 🚫 Validar si ya existe ese archivo
+  const { data: existentes, error: errorListar } = await client.storage
+    .from("tareas")
+    .list(user.id);
+
+  if (existentes?.some((f) => f.name === archivo.name)) {
+    const reemplazar = confirm("Ya existe un archivo con ese nombre. ¿Deseas reemplazarlo?");
+    if (!reemplazar) return;
+  }
+
+  const { error } = await client.storage
     .from("tareas")
     .upload(nombreRuta, archivo, {
       cacheControl: "3600",
-      upsert: false,
+      upsert: true, // permitir sobrescribir
     });
 
   if (error) {
@@ -103,7 +142,7 @@ async function listarArchivos() {
 
   const { data, error } = await client.storage
     .from("tareas")
-    .list(`${user.id}`, { limit: 20 }); // 🔧 CORREGIDO
+    .list(`${user.id}`, { limit: 20 });
 
   const lista = document.getElementById("lista-archivos");
   lista.innerHTML = "";
@@ -116,7 +155,7 @@ async function listarArchivos() {
   data.forEach(async (archivo) => {
     const { data: signedUrlData, error: signedUrlError } = await client.storage
       .from("tareas")
-      .createSignedUrl(`${user.id}/${archivo.name}`, 60); // 🔧 CORREGIDO
+      .createSignedUrl(`${user.id}/${archivo.name}`, 60);
 
     if (signedUrlError) {
       console.error("Error al generar URL firmada:", signedUrlError.message);
@@ -142,7 +181,7 @@ async function listarArchivos() {
         <a href="${publicUrl}" target="_blank">Ver PDF</a>
       `;
     } else {
-      item.innerHTML = `<a href="${publicUrl}" target="_blank">${archivo.name}</a>`; // 🔧 CORREGIDO
+      item.innerHTML = `<a href="${publicUrl}" target="_blank">${archivo.name}</a>`;
     }
 
     lista.appendChild(item);
