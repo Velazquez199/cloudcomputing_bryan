@@ -3,20 +3,30 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ✅ Toast personalizado
+function showToast(message, type = "success") {
+  const container = document.getElementById("toast-container");
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+// ✅ Agregar estudiante
 async function agregarEstudiante() {
   const nombre = document.getElementById("nombre").value.trim();
   const correo = document.getElementById("correo").value.trim();
   const clase = document.getElementById("clase").value.trim();
 
-  // 🚨 Validaciones
   if (!nombre || !correo || !clase) {
-    alert("Por favor, completa todos los campos.");
+    showToast("Por favor, completa todos los campos.", "error");
     return;
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(correo)) {
-    alert("Ingresa un correo válido.");
+    showToast("Ingresa un correo válido.", "error");
     return;
   }
 
@@ -26,18 +36,17 @@ async function agregarEstudiante() {
   } = await client.auth.getUser();
 
   if (userError || !user) {
-    alert("No estás autenticado.");
+    showToast("No estás autenticado.", "error");
     return;
   }
 
-  // ⚠️ Validar que no haya duplicados (correo ya registrado)
-  const { data: existentes, error: errorBuscar } = await client
+  const { data: existentes } = await client
     .from("estudiantes")
     .select("id")
     .eq("correo", correo);
 
   if (existentes && existentes.length > 0) {
-    alert("Ya existe un estudiante con ese correo.");
+    showToast("Ya existe un estudiante con ese correo.", "error");
     return;
   }
 
@@ -49,26 +58,32 @@ async function agregarEstudiante() {
   });
 
   if (error) {
-    alert("Error al agregar: " + error.message);
+    showToast("Error al agregar: " + error.message, "error");
   } else {
-    alert("Estudiante agregado");
+    showToast("Estudiante agregado correctamente ✅", "success");
+    // 🧹 Limpiar campos
+    document.getElementById("nombre").value = "";
+    document.getElementById("correo").value = "";
+    document.getElementById("clase").value = "";
     cargarEstudiantes();
   }
 }
 
+// ✅ Cargar estudiantes
 async function cargarEstudiantes() {
   const { data, error } = await client
     .from("estudiantes")
     .select("*")
     .order("created_at", { ascending: false });
 
+  const lista = document.getElementById("lista-estudiantes");
+  lista.innerHTML = "";
+
   if (error) {
-    alert("Error al cargar estudiantes: " + error.message);
+    showToast("Error al cargar estudiantes: " + error.message, "error");
     return;
   }
 
-  const lista = document.getElementById("lista-estudiantes");
-  lista.innerHTML = "";
   data.forEach((est) => {
     const item = document.createElement("li");
     item.textContent = `${est.nombre} (${est.clase})`;
@@ -78,17 +93,18 @@ async function cargarEstudiantes() {
 
 cargarEstudiantes();
 
+// ✅ Subir archivo
 async function subirArchivo() {
   const archivoInput = document.getElementById("archivo");
   const archivo = archivoInput.files[0];
 
   if (!archivo) {
-    alert("Selecciona un archivo primero.");
+    showToast("Selecciona un archivo primero.", "error");
     return;
   }
 
-  if (archivo.size > 5 * 1024 * 1024) { // 5 MB
-    alert("El archivo no debe superar los 5 MB.");
+  if (archivo.size > 5 * 1024 * 1024) {
+    showToast("El archivo no debe superar los 5 MB.", "error");
     return;
   }
 
@@ -98,14 +114,13 @@ async function subirArchivo() {
   } = await client.auth.getUser();
 
   if (userError || !user) {
-    alert("Sesión no válida.");
+    showToast("Sesión no válida.", "error");
     return;
   }
 
   const nombreRuta = `${user.id}/${archivo.name}`;
 
-  // 🚫 Validar si ya existe ese archivo
-  const { data: existentes, error: errorListar } = await client.storage
+  const { data: existentes } = await client.storage
     .from("tareas")
     .list(user.id);
 
@@ -118,17 +133,19 @@ async function subirArchivo() {
     .from("tareas")
     .upload(nombreRuta, archivo, {
       cacheControl: "3600",
-      upsert: true, // permitir sobrescribir
+      upsert: true,
     });
 
   if (error) {
-    alert("Error al subir: " + error.message);
+    showToast("Error al subir: " + error.message, "error");
   } else {
-    alert("Archivo subido correctamente.");
+    showToast("Archivo subido correctamente ✅", "success");
+    document.getElementById("archivo").value = ""; // 🧹 Limpiar input
     listarArchivos();
   }
 }
 
+// ✅ Listar archivos
 async function listarArchivos() {
   const {
     data: { user },
@@ -136,7 +153,7 @@ async function listarArchivos() {
   } = await client.auth.getUser();
 
   if (userError || !user) {
-    alert("Sesión no válida.");
+    showToast("Sesión no válida.", "error");
     return;
   }
 
@@ -190,14 +207,15 @@ async function listarArchivos() {
 
 listarArchivos();
 
+// ✅ Cerrar sesión
 async function cerrarSesion() {
   const { error } = await client.auth.signOut();
 
   if (error) {
-    alert("Error al cerrar sesión: " + error.message);
+    showToast("Error al cerrar sesión: " + error.message, "error");
   } else {
     localStorage.removeItem("token");
-    alert("Sesión cerrada.");
-    window.location.href = "index.html";
+    showToast("Sesión cerrada correctamente ✅", "success");
+    setTimeout(() => window.location.href = "index.html", 1500);
   }
 }
