@@ -144,7 +144,7 @@ async function subirArchivo() {
     return;
   }
 
-  const nombreRuta = ${user.id}/${archivo.name};
+  const nombreRuta = '${user.id}/${archivo.name}';
 
   const { data: existentes } = await client.storage
     .from("tareas")
@@ -185,7 +185,7 @@ async function listarArchivos() {
 
   const { data, error } = await client.storage
     .from("tareas")
-    .list(${user.id}, { limit: 20 });
+    .list('${user.id}', { limit: 20 });
 
   const lista = document.getElementById("lista-archivos");
   lista.innerHTML = "";
@@ -198,7 +198,7 @@ async function listarArchivos() {
   data.forEach(async (archivo) => {
     const { data: signedUrlData, error: signedUrlError } = await client.storage
       .from("tareas")
-      .createSignedUrl(${user.id}/${archivo.name}, 60);
+      .createSignedUrl('${user.id}/${archivo.name}', 60);
 
     if (signedUrlError) {
       console.error("Error al generar URL firmada:", signedUrlError.message);
