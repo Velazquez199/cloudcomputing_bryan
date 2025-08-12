@@ -1,217 +1,128 @@
 const SUPABASE_URL = "https://vxqskfzzfcukmdgtcpmz.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4cXNrZnp6ZmN1a21kZ3RjcG16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1MDUxMzQsImV4cCI6MjA3MDA4MTEzNH0.8zwRNdnR6zW1Yebo3H1d9ywtDySXalLk9D1pa_J0caw";
 
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const listaEstudiantes = document.getElementById("lista-estudiantes");
-const selectEstudiante = document.getElementById("estudiante");
-const btnAgregar = document.getElementById("btn-agregar");
-
-let editandoId = null;
-
-// Mostrar toast personalizado
-function showToast(message, type = "success") {
-  const container = document.getElementById("toast-container");
-  const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
-  toast.textContent = message;
-  container.appendChild(toast);
-  setTimeout(() => toast.remove(), 4000);
-}
-
-// Obtener usuario autenticado
-async function getUser() {
-  const { data, error } = await client.auth.getUser();
-  if (error || !data.user) {
-    showToast("No estás autenticado.", "error");
-    throw new Error("Usuario no autenticado");
-  }
-  return data.user;
-}
-
-// Validar si correo cambió durante edición
-function correoCambiado(nuevoCorreo) {
-  const correoActual = document.getElementById("correo").getAttribute("data-original") || "";
-  return nuevoCorreo !== correoActual;
-}
-
-// Resetear formulario a estado inicial
-function resetFormulario() {
-  document.getElementById("nombre").value = "";
-  const correoInput = document.getElementById("correo");
-  correoInput.value = "";
-  correoInput.removeAttribute("data-original");
-  document.getElementById("clase").value = "";
-  editandoId = null;
-
-  btnAgregar.textContent = "Agregar";
-  btnAgregar.onclick = agregarEstudiante;
-}
-
-// Cargar estudiantes y actualizar lista y select
-async function cargarEstudiantes() {
-  try {
-    const { data, error } = await client
-      .from("estudiantes")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      showToast("Error al cargar estudiantes: " + error.message, "error");
-      return;
-    }
-
-    listaEstudiantes.innerHTML = "";
-    selectEstudiante.innerHTML = '<option value="">--Selecciona--</option>';
-
-    data.forEach((est) => {
-      const li = document.createElement("li");
-      li.textContent = `${est.nombre} (${est.correo}) - Clase: ${est.clase} `;
-
-      // Botón editar
-      const btnEditar = document.createElement("button");
-      btnEditar.textContent = "Editar";
-      btnEditar.classList.add("edit-btn");
-      btnEditar.addEventListener("click", () => {
-        editarEstudiante(est.id, est.nombre, est.correo, est.clase);
-      });
-
-      // Botón eliminar
-      const btnEliminar = document.createElement("button");
-      btnEliminar.textContent = "Eliminar";
-      btnEliminar.classList.add("delete-btn");
-      btnEliminar.addEventListener("click", () => {
-        eliminarEstudiante(est.id);
-      });
-
-      li.appendChild(btnEditar);
-      li.appendChild(btnEliminar);
-
-      listaEstudiantes.appendChild(li);
-
-      // Opciones select para subir archivo
-      const option = document.createElement("option");
-      option.value = est.id;
-      option.textContent = est.nombre;
-      selectEstudiante.appendChild(option);
-    });
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-// Agregar o actualizar estudiante
 async function agregarEstudiante() {
-  const nombre = document.getElementById("nombre").value.trim();
-  const correo = document.getElementById("correo").value.trim();
-  const clase = document.getElementById("clase").value.trim();
+  const nombre = document.getElementById("nombre").value;
+  const correo = document.getElementById("correo").value;
+  const clase = document.getElementById("clase").value;
 
-  if (!nombre || !correo || !clase) {
-    showToast("Por favor, completa todos los campos.", "error");
+  const {
+    data: { user },
+    error: userError,
+  } = await client.auth.getUser();
+
+  if (userError || !user) {
+    alert("No estás autenticado.");
     return;
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(correo)) {
-    showToast("Ingresa un correo válido.", "error");
+  const { error } = await client.from("estudiantes").insert({
+    nombre,
+    correo,
+    clase,
+    user_id: user.id,
+  });
+
+  if (error) {
+    alert("Error al agregar: " + error.message);
+  } else {
+    alert("Estudiante agregado");
+    cargarEstudiantes();
+  }
+}
+
+async function cargarEstudiantes() {
+  const { data, error } = await client
+    .from("estudiantes")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    alert("Error al cargar estudiantes: " + error.message);
     return;
   }
 
-  try {
-    const user = await getUser();
+  const lista = document.getElementById("lista-estudiantes");
+  lista.innerHTML = "";
+  data.forEach((est) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${est.nombre}</td>
+      <td>${est.correo}</td>
+      <td>${est.clase}</td>
+      <td>
+        <button onclick="editarEstudiante('${est.id}')">✏ Editar</button>
+        <button onclick="eliminarEstudiante('${est.id}')">🗑 Eliminar</button>
+      </td>
+    `;
+    lista.appendChild(row);
+  });
+}
 
-    // Validar correo duplicado si no estamos editando o si cambiamos correo
-    if (!editandoId || (editandoId && correoCambiado(correo))) {
-      const { data: existentes } = await client
-        .from("estudiantes")
-        .select("id")
-        .eq("correo", correo);
+// 📝 Editar estudiante
+async function editarEstudiante(id) {
+  const { data: estudiante, error } = await client
+    .from("estudiantes")
+    .select("*")
+    .eq("id", id)
+    .single();
 
-      if (existentes && existentes.length > 0) {
-        showToast("Ya existe un estudiante con ese correo.", "error");
-        return;
-      }
-    }
+  if (error) {
+    alert("Error al obtener datos: " + error.message);
+    return;
+  }
 
-    if (editandoId) {
-      // Actualizar estudiante
-      const { error } = await client
-        .from("estudiantes")
-        .update({ nombre, correo, clase })
-        .eq("id", editandoId);
+  const nuevoNombre = prompt("Nuevo nombre:", estudiante.nombre);
+  const nuevoCorreo = prompt("Nuevo correo:", estudiante.correo);
+  const nuevaClase = prompt("Nueva clase:", estudiante.clase);
 
-      if (error) {
-        showToast("Error al actualizar: " + error.message, "error");
-      } else {
-        showToast("Estudiante actualizado correctamente ✅", "success");
-        resetFormulario();
-        cargarEstudiantes();
-      }
-    } else {
-      // Insertar nuevo estudiante
-      const { error } = await client.from("estudiantes").insert({
-        nombre,
-        correo,
-        clase,
-        user_id: user.id,
-      });
+  if (!nuevoNombre || !nuevoCorreo || !nuevaClase) {
+    alert("Todos los campos son obligatorios.");
+    return;
+  }
 
-      if (error) {
-        showToast("Error al agregar: " + error.message, "error");
-      } else {
-        showToast("Estudiante agregado correctamente ✅", "success");
-        resetFormulario();
-        cargarEstudiantes();
-      }
-    }
-  } catch (e) {
-    console.error(e);
+  const { error: updateError } = await client
+    .from("estudiantes")
+    .update({
+      nombre: nuevoNombre,
+      correo: nuevoCorreo,
+      clase: nuevaClase,
+    })
+    .eq("id", id);
+
+  if (updateError) {
+    alert("Error al actualizar: " + updateError.message);
+  } else {
+    alert("Estudiante actualizado ✅");
+    cargarEstudiantes();
   }
 }
 
-// Preparar formulario para editar estudiante
-function editarEstudiante(id, nombre, correo, clase) {
-  document.getElementById("nombre").value = nombre;
-  const correoInput = document.getElementById("correo");
-  correoInput.value = correo;
-  correoInput.setAttribute("data-original", correo);
-
-  document.getElementById("clase").value = clase;
-
-  editandoId = id;
-
-  btnAgregar.textContent = "Guardar cambios";
-  btnAgregar.onclick = agregarEstudiante;
-}
-
-// Eliminar estudiante con confirmación
+// 🗑 Eliminar estudiante
 async function eliminarEstudiante(id) {
-  if (!confirm("¿Seguro que deseas eliminar este estudiante?")) return;
+  if (!confirm("¿Seguro que quieres eliminar este estudiante?")) return;
 
-  try {
-    const { error } = await client.from("estudiantes").delete().eq("id", id);
+  const { error } = await client
+    .from("estudiantes")
+    .delete()
+    .eq("id", id);
 
-    if (error) {
-      showToast("Error al eliminar estudiante: " + error.message, "error");
-    } else {
-      showToast("Estudiante eliminado ✅", "success");
-      cargarEstudiantes();
-    }
-  } catch (e) {
-    console.error(e);
+  if (error) {
+    alert("Error al eliminar: " + error.message);
+  } else {
+    alert("Estudiante eliminado ✅");
+    cargarEstudiantes();
   }
 }
 
-// Subir archivo vinculado a estudiante seleccionado
+
+cargarEstudiantes();
+// ✅ Subir archivo
 async function subirArchivo() {
   const archivoInput = document.getElementById("archivo");
   const archivo = archivoInput.files[0];
-  const estudianteId = selectEstudiante.value;
-
-  if (!estudianteId) {
-    showToast("Selecciona un estudiante para asociar el archivo.", "error");
-    return;
-  }
 
   if (!archivo) {
     showToast("Selecciona un archivo primero.", "error");
@@ -223,108 +134,113 @@ async function subirArchivo() {
     return;
   }
 
-  try {
-    const user = await getUser();
+  const {
+    data: { user },
+    error: userError,
+  } = await client.auth.getUser();
 
-    // Ruta para guardar archivo: carpeta usuario + estudiante + archivo
-    const nombreRuta = `${user.id}/${estudianteId}/${archivo.name}`;
+  if (userError || !user) {
+    showToast("Sesión no válida.", "error");
+    return;
+  }
 
-    // Verificar si archivo ya existe
-    const { data: existentes } = await client.storage.from("tareas").list(`${user.id}/${estudianteId}`);
+  const nombreRuta = ${user.id}/${archivo.name};
 
-    if (existentes?.some((f) => f.name === archivo.name)) {
-      const reemplazar = confirm("Ya existe un archivo con ese nombre. ¿Deseas reemplazarlo?");
-      if (!reemplazar) return;
-    }
+  const { data: existentes } = await client.storage
+    .from("tareas")
+    .list(user.id);
 
-    const { error } = await client.storage
-      .from("tareas")
-      .upload(nombreRuta, archivo, { cacheControl: "3600", upsert: true });
+  if (existentes?.some((f) => f.name === archivo.name)) {
+    const reemplazar = confirm("Ya existe un archivo con ese nombre. ¿Deseas reemplazarlo?");
+    if (!reemplazar) return;
+  }
 
-    if (error) {
-      showToast("Error al subir archivo: " + error.message, "error");
-    } else {
-      showToast("Archivo subido correctamente ✅", "success");
-      archivoInput.value = "";
-      listarArchivos();
-    }
-  } catch (e) {
-    console.error(e);
+  const { error } = await client.storage
+    .from("tareas")
+    .upload(nombreRuta, archivo, {
+      cacheControl: "3600",
+      upsert: true,
+    });
+
+  if (error) {
+    showToast("Error al subir: " + error.message, "error");
+  } else {
+    showToast("Archivo subido correctamente ✅", "success");
+    document.getElementById("archivo").value = ""; // 🧹 Limpiar input
+    listarArchivos();
   }
 }
 
-// Listar archivos del usuario
+
 async function listarArchivos() {
-  try {
-    const user = await getUser();
+  const {
+    data: { user },
+    error: userError,
+  } = await client.auth.getUser();
 
-    const { data, error } = await client.storage
+  if (userError || !user) {
+    alert("Sesión no válida.");
+    return;
+  }
+
+  const { data, error } = await client.storage
+    .from("tareas")
+    .list(${user.id}, { limit: 20 });
+
+  const lista = document.getElementById("lista-archivos");
+  lista.innerHTML = "";
+
+  if (error) {
+    lista.innerHTML = "<li>Error al listar archivos</li>";
+    return;
+  }
+
+  data.forEach(async (archivo) => {
+    const { data: signedUrlData, error: signedUrlError } = await client.storage
       .from("tareas")
-      .list(`${user.id}`, { limit: 100 });
+      .createSignedUrl(${user.id}/${archivo.name}, 60);
 
-    const lista = document.getElementById("lista-archivos");
-    lista.innerHTML = "";
-
-    if (error) {
-      lista.innerHTML = "<li>Error al listar archivos</li>";
+    if (signedUrlError) {
+      console.error("Error al generar URL firmada:", signedUrlError.message);
       return;
     }
 
-    for (const archivo of data) {
-      const { data: signedUrlData, error: signedUrlError } = await client.storage
-        .from("tareas")
-        .createSignedUrl(`${user.id}/${archivo.name}`, 60);
+    const publicUrl = signedUrlData.signedUrl;
+    const item = document.createElement("li");
 
-      if (signedUrlError) {
-        console.error("Error al generar URL firmada:", signedUrlError.message);
-        continue;
-      }
+    const esImagen = archivo.name.match(/\.(jpg|jpeg|png|gif)$/i);
+    const esPDF = archivo.name.match(/\.pdf$/i);
 
-      const publicUrl = signedUrlData.signedUrl;
-      const item = document.createElement("li");
-
-      const esImagen = archivo.name.match(/\.(jpg|jpeg|png|gif)$/i);
-      const esPDF = archivo.name.match(/\.pdf$/i);
-
-      if (esImagen) {
-        item.innerHTML = `
-          <strong>${archivo.name}</strong><br>
-          <a href="${publicUrl}" target="_blank">
-            <img src="${publicUrl}" width="150" style="border:1px solid #ccc; margin:5px;" />
-          </a>
-        `;
-      } else if (esPDF) {
-        item.innerHTML = `
-          <strong>${archivo.name}</strong><br>
-          <a href="${publicUrl}" target="_blank">Ver PDF</a>
-        `;
-      } else {
-        item.innerHTML = `<a href="${publicUrl}" target="_blank">${archivo.name}</a>`;
-      }
-
-      lista.appendChild(item);
+    if (esImagen) {
+      item.innerHTML = `
+        <strong>${archivo.name}</strong><br>
+        <a href="${publicUrl}" target="_blank">
+          <img src="${publicUrl}" width="150" style="border:1px solid #ccc; margin:5px;" />
+        </a>
+      `;
+    } else if (esPDF) {
+      item.innerHTML = `
+        <strong>${archivo.name}</strong><br>
+        <a href="${publicUrl}" target="_blank">Ver PDF</a>
+      `;
+    } else {
+      item.innerHTML = <a href="${publicUrl}" target="_blank">${archivo.name}</a>;
     }
-  } catch (e) {
-    console.error(e);
-  }
+
+    lista.appendChild(item);
+  });
 }
 
-// Carga inicial de estudiantes y archivos
-cargarEstudiantes();
 listarArchivos();
 
-// Cerrar sesión
 async function cerrarSesion() {
-  try {
-    const { error } = await client.auth.signOut();
-    if (error) {
-      showToast("Error al cerrar sesión: " + error.message, "error");
-    } else {
-      localStorage.removeItem("token");
-      showToast("Sesión cerrada correctamente ✅", "success");
-      setTimeout(() => window.location.href = "index.html", 1500);
-    }
-  } catch (e) {
-    console.error(e);
+  const { error } = await client.auth.signOut();
+
+  if (error) {
+    alert("Error al cerrar sesión: " + error.message);
+  } else {
+    localStorage.removeItem("token");
+    alert("Sesión cerrada.");
+    window.location.href = "index.html";
   }
 }
