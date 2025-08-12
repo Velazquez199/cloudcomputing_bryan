@@ -4,9 +4,14 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function agregarEstudiante() {
-  const nombre = document.getElementById("nombre").value;
-  const correo = document.getElementById("correo").value;
-  const clase = document.getElementById("clase").value;
+  const nombre = document.getElementById("nombre").value.trim();
+  const correo = document.getElementById("correo").value.trim();
+  const clase = document.getElementById("clase").value.trim();
+
+  if (!nombre || !correo || !clase) {
+    alert("Por favor completa todos los campos.");
+    return;
+  }
 
   const {
     data: { user },
@@ -61,7 +66,7 @@ async function cargarEstudiantes() {
   });
 }
 
-// 📝 Editar estudiante
+// Editar estudiante
 async function editarEstudiante(id) {
   const { data: estudiante, error } = await client
     .from("estudiantes")
@@ -100,7 +105,7 @@ async function editarEstudiante(id) {
   }
 }
 
-// 🗑 Eliminar estudiante
+// Eliminar estudiante
 async function eliminarEstudiante(id) {
   if (!confirm("¿Seguro que quieres eliminar este estudiante?")) return;
 
@@ -117,20 +122,18 @@ async function eliminarEstudiante(id) {
   }
 }
 
-
-cargarEstudiantes();
-// ✅ Subir archivo
+// Subir archivo
 async function subirArchivo() {
   const archivoInput = document.getElementById("archivo");
   const archivo = archivoInput.files[0];
 
   if (!archivo) {
-    showToast("Selecciona un archivo primero.", "error");
+    alert("Selecciona un archivo primero.");
     return;
   }
 
   if (archivo.size > 5 * 1024 * 1024) {
-    showToast("El archivo no debe superar los 5 MB.", "error");
+    alert("El archivo no debe superar los 5 MB.");
     return;
   }
 
@@ -140,11 +143,11 @@ async function subirArchivo() {
   } = await client.auth.getUser();
 
   if (userError || !user) {
-    showToast("Sesión no válida.", "error");
+    alert("Sesión no válida.");
     return;
   }
 
-  const nombreRuta = '${user.id}/${archivo.name}';
+  const nombreRuta = `${user.id}/${archivo.name}`;
 
   const { data: existentes } = await client.storage
     .from("tareas")
@@ -163,14 +166,13 @@ async function subirArchivo() {
     });
 
   if (error) {
-    showToast("Error al subir: " + error.message, "error");
+    alert("Error al subir: " + error.message);
   } else {
-    showToast("Archivo subido correctamente ✅", "success");
-    document.getElementById("archivo").value = ""; // 🧹 Limpiar input
+    alert("Archivo subido correctamente ✅");
+    archivoInput.value = ""; // limpiar input
     listarArchivos();
   }
 }
-
 
 async function listarArchivos() {
   const {
@@ -185,7 +187,7 @@ async function listarArchivos() {
 
   const { data, error } = await client.storage
     .from("tareas")
-    .list('${user.id}', { limit: 20 });
+    .list(user.id, { limit: 20 });
 
   const lista = document.getElementById("lista-archivos");
   lista.innerHTML = "";
@@ -195,14 +197,15 @@ async function listarArchivos() {
     return;
   }
 
-  data.forEach(async (archivo) => {
+  // Usamos for...of para await
+  for (const archivo of data) {
     const { data: signedUrlData, error: signedUrlError } = await client.storage
       .from("tareas")
-      .createSignedUrl('${user.id}/${archivo.name}', 60);
+      .createSignedUrl(`${user.id}/${archivo.name}`, 60);
 
     if (signedUrlError) {
       console.error("Error al generar URL firmada:", signedUrlError.message);
-      return;
+      continue;
     }
 
     const publicUrl = signedUrlData.signedUrl;
@@ -224,14 +227,12 @@ async function listarArchivos() {
         <a href="${publicUrl}" target="_blank">Ver PDF</a>
       `;
     } else {
-      item.innerHTML = <a href="${publicUrl}" target="_blank">${archivo.name}</a>;
+      item.innerHTML = `<a href="${publicUrl}" target="_blank">${archivo.name}</a>`;
     }
 
     lista.appendChild(item);
-  });
+  }
 }
-
-listarArchivos();
 
 async function cerrarSesion() {
   const { error } = await client.auth.signOut();
@@ -244,3 +245,6 @@ async function cerrarSesion() {
     window.location.href = "index.html";
   }
 }
+
+cargarEstudiantes();
+listarArchivos();
