@@ -35,8 +35,14 @@ async function agregarEstudiante() {
   } else {
     alert("Estudiante agregado");
     cargarEstudiantes();
+
+    // Limpiar formulario
+    document.getElementById("nombre").value = "";
+    document.getElementById("correo").value = "";
+    document.getElementById("clase").value = "";
   }
 }
+
 
 async function cargarEstudiantes() {
   const { data, error } = await client
