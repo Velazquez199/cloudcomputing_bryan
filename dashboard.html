@@ -18,13 +18,14 @@
       <input type="text" id="nombre" placeholder="Nombre del estudiante" />
       <input type="email" id="correo" placeholder="Correo" />
       <input type="text" id="clase" placeholder="Clase" />
-      <button onclick="agregarEstudiante()">Agregar</button>
+      <!-- Le agregamos id para manejar desde JS -->
+      <button id="btn-agregar" onclick="agregarEstudiante()">Agregar</button>
     </section>
 
     <section class="card">
       <h2>Lista de estudiantes</h2>
       <ul id="lista-estudiantes">
-        <!-- Aquí se cargan los estudiantes con botones Editar y Eliminar desde JS -->
+        <!-- Aquí se cargarán los estudiantes con botones desde JS -->
       </ul>
     </section>
 
