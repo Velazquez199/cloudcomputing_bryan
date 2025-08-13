@@ -44,6 +44,7 @@ async function agregarEstudiante() {
 }
 
 
+
 async function cargarEstudiantes() {
   const { data, error } = await client
     .from("estudiantes")
